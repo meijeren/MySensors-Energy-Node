@@ -3,10 +3,12 @@
 #include <MySensor.h>  
 
 #define NODE_ID 0xEE
-#define NODE_TEXT     "Energy"
-#define NODE_VERSION  "0.1"
+#define NODE_TEXT     "ElectricityGasWater"
+#define NODE_VERSION  "0.2"
 
-#define SENSOR_ID 1
+#define SENSOR_ID       1
+#define SENSOR_ID_GAS   2
+#define SENSOR_ID_WATER 3
 #define SEND_FREQUENCY 20000
 
 // NRFRF24L01 radio driver (set low transmit power by default)
@@ -14,10 +16,18 @@ MyTransportNRF24 radio(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
 // Select AtMega328 hardware profile
 MyHwATMega328 hw;
 // Construct MySensors library
-MySensor gw(radio, hw);
+MySensor  gw(radio, hw);
 MyMessage wattMsg(SENSOR_ID, V_WATT);
 MyMessage kwhMsg(SENSOR_ID, V_KWH);
 MyMessage pcMsg(SENSOR_ID, V_VAR1);
+
+MyMessage gasFlowMsg(SENSOR_ID_GAS, V_FLOW);
+MyMessage gasVolumeMsg(SENSOR_ID_GAS, V_VOLUME);
+MyMessage gasLastCounterMsg(SENSOR_ID_GAS, V_VAR1);
+
+MyMessage waterFlowMsg(SENSOR_ID_WATER, V_FLOW);
+MyMessage waterVolumeMsg(SENSOR_ID_WATER, V_VOLUME);
+MyMessage waterLastCounterMsg(SENSOR_ID_WATER, V_VAR1);
 
 unsigned long lastSend;
 
@@ -26,16 +36,20 @@ void setup() {
   Serial.println(F(NODE_TEXT  " "  NODE_VERSION));
 
   // Send the sketch version information to the gateway and Controller
-  gw.sendSketchInfo("Energy Meter", "1.0");
+  gw.sendSketchInfo(NODE_TEXT, NODE_VERSION);
 
   // Register this device as power sensor
   gw.present(SENSOR_ID, S_POWER);
-  lastSend=millis();
+  // Register this device as Waterflow sensor
+  gw.present(SENSOR_ID_GAS, S_WATER); 
+  // Register this device as Waterflow sensor
+  gw.present(SENSOR_ID_WATER, S_WATER); 
 
+  lastSend=millis();
 }
 
 bool prevPulse = true;
-int drempel = 570;
+#define DREMPEL 570
 unsigned long pulseCount = 0;
 float totalkWh = 0;
 unsigned long curWatts = 0;
@@ -66,7 +80,7 @@ void loop()
     Serial.print(max);
     Serial.println("]");
   }
-  bool pulse = (sensorValue < drempel);
+  bool pulse = (sensorValue < DREMPEL);
 
   if ((prevPulse != pulse) && pulse) 
   {
