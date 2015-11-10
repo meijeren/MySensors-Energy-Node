@@ -64,11 +64,19 @@ void loop()
   gw.process();
   unsigned long now = millis();
   // read the input on analog pin 0:
-  unsigned short sum = 0;
-  for (byte i = 0; i < 40; i++) {
-    sum += analogRead(A0);
+  unsigned short sum[3];
+  for (byte i = 0; i < 3; i++)
+  {
+    sum[i] = 0;
   }
-  int sensorValue = sum / 40;
+  for (byte i = 0; i < 40; i++) 
+  {
+    for (byte j = 0; j < 3; j++)
+    {
+      sum[j] += analogRead(A0 + j);
+    }
+  }
+  int sensorValue = sum[0] / 40;
   if (sensorValue < min) min = sensorValue;
   if (sensorValue > max) max = sensorValue;
   if (pulseCount < 1)
