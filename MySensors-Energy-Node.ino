@@ -2,13 +2,15 @@
 #include <MyHwATMega328.h>
 #include <MySensor.h>  
 
-#define NODE_ID 0xEE
+// Node definitions
+#define NODE_ID       0xEE
 #define NODE_TEXT     "ElectricityGasWater"
 #define NODE_VERSION  "0.2"
-
+// Sensor definitions
 #define SENSOR_ID       1
 #define SENSOR_ID_GAS   2
 #define SENSOR_ID_WATER 3
+
 #define SEND_FREQUENCY 20000
 
 // NRFRF24L01 radio driver (set low transmit power by default)
