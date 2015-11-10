@@ -4,10 +4,10 @@
 
 // Node definitions
 #define NODE_ID       0xEE
-#define NODE_TEXT     "ElectricityGasWater"
-#define NODE_VERSION  "0.2"
+#define NODE_TEXT     "PowerGasWater"
+#define NODE_VERSION  "0.3"
 // Sensor definitions
-#define SENSOR_ID       1
+#define SENSOR_ID_POWER 1
 #define SENSOR_ID_GAS   2
 #define SENSOR_ID_WATER 3
 
@@ -19,9 +19,9 @@ MyTransportNRF24 radio(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
 MyHwATMega328 hw;
 // Construct MySensors library
 MySensor  gw(radio, hw);
-MyMessage wattMsg(SENSOR_ID, V_WATT);
-MyMessage kwhMsg(SENSOR_ID, V_KWH);
-MyMessage pcMsg(SENSOR_ID, V_VAR1);
+MyMessage wattMsg(SENSOR_ID_POWER, V_WATT);
+MyMessage kwhMsg(SENSOR_ID_POWER, V_KWH);
+MyMessage pcMsg(SENSOR_ID_POWER, V_VAR1);
 
 MyMessage gasFlowMsg(SENSOR_ID_GAS, V_FLOW);
 MyMessage gasVolumeMsg(SENSOR_ID_GAS, V_VOLUME);
@@ -41,7 +41,7 @@ void setup() {
   gw.sendSketchInfo(NODE_TEXT, NODE_VERSION);
 
   // Register this device as power sensor
-  gw.present(SENSOR_ID, S_POWER);
+  gw.present(SENSOR_ID_POWER, S_POWER);
   // Register this device as Waterflow sensor
   gw.present(SENSOR_ID_GAS, S_WATER); 
   // Register this device as Waterflow sensor
