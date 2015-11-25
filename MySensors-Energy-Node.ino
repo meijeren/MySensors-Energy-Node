@@ -1,129 +1,185 @@
+// Node definitions
+#define MY_DEBUG
+#define MY_RADIO_NRF24
+#define MY_NODE_ID    0xEE
+
 #include <SPI.h>
-#include <MyHwATMega328.h>
 #include <MySensor.h>  
 
-// Node definitions
-#define NODE_ID       0xEE
+
 #define NODE_TEXT     "PowerGasWater"
-#define NODE_VERSION  "0.3"
+#define NODE_VERSION  "0.4"
 // Sensor definitions
+#define SENSOR_COUNT    3
 #define SENSOR_ID_POWER 1
 #define SENSOR_ID_GAS   2
 #define SENSOR_ID_WATER 3
+#define CHILD_ID 1
 
 #define SEND_FREQUENCY 20000
 
-// NRFRF24L01 radio driver (set low transmit power by default)
-MyTransportNRF24 radio(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
-// Select AtMega328 hardware profile
-MyHwATMega328 hw;
 // Construct MySensors library
-MySensor  gw(radio, hw);
-MyMessage wattMsg(SENSOR_ID_POWER, V_WATT);
-MyMessage kwhMsg(SENSOR_ID_POWER, V_KWH);
-MyMessage pcMsg(SENSOR_ID_POWER, V_VAR1);
+MyMessage currentMsg(SENSOR_ID_POWER, V_WATT);
+MyMessage totalMsg(SENSOR_ID_POWER, V_KWH);
+MyMessage pulseCountMsg(SENSOR_ID_POWER, V_VAR1);
 
-MyMessage gasFlowMsg(SENSOR_ID_GAS, V_FLOW);
-MyMessage gasVolumeMsg(SENSOR_ID_GAS, V_VOLUME);
-MyMessage gasLastCounterMsg(SENSOR_ID_GAS, V_VAR1);
+MyMessage gasCurrentMsg(SENSOR_ID_GAS, V_FLOW);
+MyMessage gasTotalMsg(SENSOR_ID_GAS, V_VOLUME);
+MyMessage gasPulseCountMsg(SENSOR_ID_GAS, V_VAR1);
 
-MyMessage waterFlowMsg(SENSOR_ID_WATER, V_FLOW);
-MyMessage waterVolumeMsg(SENSOR_ID_WATER, V_VOLUME);
-MyMessage waterLastCounterMsg(SENSOR_ID_WATER, V_VAR1);
+MyMessage waterCurrentMsg(SENSOR_ID_WATER, V_FLOW);
+MyMessage waterTotalMsg(SENSOR_ID_WATER, V_VOLUME);
+MyMessage waterPulseCountMsg(SENSOR_ID_WATER, V_VAR1);
 
-unsigned long lastSend;
+unsigned long lastSend[SENSOR_COUNT];
 
-void setup() {
-  gw.begin(NULL, NODE_ID, false);
+void setup() 
+{
   Serial.println(F(NODE_TEXT  " "  NODE_VERSION));
-
-  // Send the sketch version information to the gateway and Controller
-  gw.sendSketchInfo(NODE_TEXT, NODE_VERSION);
-
-  // Register this device as power sensor
-  gw.present(SENSOR_ID_POWER, S_POWER);
-  // Register this device as Waterflow sensor
-  gw.present(SENSOR_ID_GAS, S_WATER); 
-  // Register this device as Waterflow sensor
-  gw.present(SENSOR_ID_WATER, S_WATER); 
-
-  lastSend=millis();
 }
 
-bool prevPulse = true;
-#define DREMPEL 570
-unsigned long pulseCount = 0;
-float totalkWh = 0;
-unsigned long curWatts = 0;
-bool sendNeeded = false;
-unsigned long prevMillis = 0;
-#define C 375
-int min = 1023;
-int max = 0;
+void presentation()
+{
+  // Send the sketch version information to the gateway and Controller
+  sendSketchInfo(NODE_TEXT, NODE_VERSION);
+
+  // Register this device as power sensor
+  present(SENSOR_ID_POWER, S_POWER);
+  // Register this device as Waterflow sensor
+  present(SENSOR_ID_GAS, S_GAS); 
+  // Register this device as Waterflow sensor
+  present(SENSOR_ID_WATER, S_WATER); 
+
+  for (byte idx = 0; idx < SENSOR_COUNT; idx++) 
+  {
+    lastSend[idx] = millis();
+    // Fetch last known pulse count value from the controller
+    request(idx + 1, V_VAR1);
+  }
+}
+
+
+bool          prevPulse[SENSOR_COUNT]          = {true, true, true};
+const int     DREMPEL[SENSOR_COUNT]            = {570, 512, 512};
+unsigned long pulseCount[SENSOR_COUNT]         = {0, 0, 0};
+boolean       pulseCountReceived[SENSOR_COUNT] = {false, false, false};
+float         totalkWh[SENSOR_COUNT]           = {0, 0, 0};
+unsigned long curWatts[SENSOR_COUNT]           = {0, 0, 0};
+bool          sendNeeded[SENSOR_COUNT]         = {false, false, false};
+unsigned long prevMillis[SENSOR_COUNT]         = {0, 0, 0};
+const int     PULSE_FACTOR[SENSOR_COUNT]       = {375, 1000, 1000};
+const double  PULSE_PER_UNIT[SENSOR_COUNT]     = {
+  ((double)PULSE_FACTOR[0]) / 1000, // Pulses per watt hour
+  ((double)PULSE_FACTOR[1]) / 1000, // Pulses per liter
+  ((double)PULSE_FACTOR[2]) / 1000, // Pulses per liter
+};
+int           min[SENSOR_COUNT]                = {1023, 1023, 1023};
+int           max[SENSOR_COUNT]                = {0, 0, 0};
+const char *  NAME[SENSOR_COUNT]               = {"E: ", "W: ", "G: "};
 
 void loop() 
 {
-  gw.process();
   unsigned long now = millis();
-  // read the input on analog pin 0:
-  unsigned short sum[3];
-  for (byte i = 0; i < 3; i++)
-  {
-    sum[i] = 0;
-  }
+  unsigned short sum[3] = {0, 0, 0};
+  // read the input on analog pin A0, A1 and A2:
   for (byte i = 0; i < 40; i++) 
   {
-    for (byte j = 0; j < 3; j++)
+    for (byte idx = 0; idx < 3; idx++)
     {
-      sum[j] += analogRead(A0 + j);
+      sum[idx] += analogRead(A0 + idx);
     }
   }
-  int sensorValue = sum[0] / 40;
-  if (sensorValue < min) min = sensorValue;
-  if (sensorValue > max) max = sensorValue;
-  if (pulseCount < 1)
+  for (byte idx = 0; idx < 3; idx++)
   {
-    Serial.print(sensorValue);
-    Serial.print(" [");
-    Serial.print(min);
-    Serial.print("-");
-    Serial.print(max);
-    Serial.println("]");
-  }
-  bool pulse = (sensorValue < DREMPEL);
+    // Calculate average sensorvalue
+    int sensorValue = sum[idx] / 40;
+    // Update min/max values
+    if (sensorValue < min[idx]) min[idx] = sensorValue;
+    if (sensorValue > max[idx]) max[idx] = sensorValue;
+    if (pulseCount[idx] < 1)
+    {
+      // print min/max values until the first pulse has passed
+      Serial.print(NAME[idx]);
+      Serial.print(sensorValue);
+      Serial.print(" [");
+      Serial.print(min[idx]);
+      Serial.print("-");
+      Serial.print(max[idx]);
+      Serial.println("]");
+    }
+    // are we now in a pulse?
+    bool pulse = (sensorValue < DREMPEL[idx]);
+    if ((prevPulse[idx] != pulse) && pulse) 
+    {
+      // increase the total pulse count
+      pulseCount[idx]++;
+      // determine the time between the pulses
+      unsigned long pulseTime = (now - prevMillis[idx]);
+      prevMillis[idx] = now;
+      totalkWh[idx] = float(pulseCount[idx]) / PULSE_FACTOR[idx];
+      curWatts[idx] = (3600000000.0 / (PULSE_FACTOR[idx] * pulseTime));
+      if (idx < 1)
+      {
+        Serial.print(NAME[idx]);
+        Serial.print("Pulse ");
+        Serial.print(pulseCount[idx]);
+        Serial.print(" T=");
+        Serial.print(pulseTime);
+        Serial.print(" Curr=");
+        Serial.print(curWatts[idx]);
+        Serial.print(" Total=");
+        Serial.println(totalkWh[idx]);
+      }
 
-  if ((prevPulse != pulse) && pulse) 
-  {
-    pulseCount++;
-    
-    unsigned long pulseTime = (now - prevMillis);
-    prevMillis = now;
-    totalkWh = float(pulseCount) / C;
-    curWatts = (3600000000.0 / (C * pulseTime));
-    Serial.print("Pulse ");
-    Serial.print(pulseCount);
-    Serial.print(" T=");
-    Serial.print(pulseTime);
-    Serial.print(" Curr=");
-    Serial.print(curWatts);
-    
-    Serial.print(" Total=");
-    Serial.println(totalkWh);
-    
-    sendNeeded = true;
-  }
-  prevPulse = pulse;
-  if (sendNeeded)
-  {
-    bool send = (now - lastSend) > SEND_FREQUENCY;
-    if (send)
-    {
-      gw.send(pcMsg.set(pulseCount));  // Send pulse count value to gw 
-      gw.send(wattMsg.set(curWatts));  // Send watt value to gw 
-      gw.send(kwhMsg.set(totalkWh, 4));  // Send kwh value to gw 
-      lastSend = now;
-      sendNeeded = false;
+      // Start sending messages only when the initial pulsecount has been received.
+      sendNeeded[idx] = pulseCountReceived[idx];
     }
+    prevPulse[idx] = pulse;
+    if (sendNeeded[idx])
+    {
+      bool sendNow = (now - lastSend[idx]) > SEND_FREQUENCY;
+      if (sendNow)
+      {
+        switch (idx)
+        {
+          case 0:
+            send(pulseCountMsg.set(pulseCount[idx]));  // Send pulse count value to gw 
+            send(currentMsg.set(curWatts[idx]));  // Send watt value to gw 
+            send(totalMsg.set(totalkWh[idx], 4));  // Send kwh value to gw 
+            break;
+          case 1:
+            /*
+            gw.send(gasPulseCountMsg.set(pulseCount[idx]));  // Send pulse count value to gw 
+            gw.send(gasCurrentMsg.set(curWatts[idx]));  // Send watt value to gw 
+            gw.send(gasTotalMsg.set(totalkWh[idx], 4));  // Send kwh value to gw 
+            */
+            break;
+          case 2:
+            /*
+            gw.send(waterPulseCountMsg.set(pulseCount[idx]));  // Send pulse count value to gw 
+            gw.send(waterCurrentMsg.set(curWatts[idx]));  // Send watt value to gw 
+            gw.send(waterTotalMsg.set(totalkWh[idx], 4));  // Send kwh value to gw 
+            */
+            break;
+        }
+        lastSend[idx] = now;
+        sendNeeded[idx] = false;
+      }
+    }
+  }
+}
+
+void incomingMessage(const MyMessage & message) 
+{
+  if (V_VAR1 == message.type) 
+  {
+    byte idx = message.sensor - 1;
+    if (idx >= SENSOR_COUNT) return;
+    pulseCount[idx] = message.getLong();
+    Serial.print(NAME[idx]);
+    Serial.print("Received last pulse count from gw ");
+    Serial.println(pulseCount[idx]);
+    pulseCountReceived[idx] = true;
   }
 }
 
