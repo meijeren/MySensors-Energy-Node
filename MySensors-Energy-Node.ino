@@ -2,6 +2,8 @@
 #define MY_DEBUG
 #define MY_RADIO_NRF24
 #define MY_NODE_ID    0xEE
+//#define MY_PARENT_NODE_ID 0
+//#define MY_REPEATER_FEATURE
 
 #include <SPI.h>
 #include <MySensor.h>  
@@ -169,7 +171,7 @@ void loop()
   }
 }
 
-void incomingMessage(const MyMessage & message) 
+void receive(const MyMessage & message) 
 {
   if (V_VAR1 == message.type) 
   {
