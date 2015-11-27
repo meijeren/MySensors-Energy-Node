@@ -130,8 +130,8 @@ void loop()
       // determine the time between the pulses
       unsigned long pulseTime = (now - prevMillis[idx]);
       prevMillis[idx] = now;
-      totalkWh[idx] = double(pulseCount[idx]) / PULSE_FACTOR[idx];
-      curWatts[idx] = (3600000000.0 / (PULSE_FACTOR[idx] * pulseTime));
+      total[idx]   = double(pulseCount[idx]) / PULSE_FACTOR[idx];
+      current[idx] = (3600000000.0 / (PULSE_FACTOR[idx] * pulseTime));
       if (idx < 1)
       {
         Serial.print(NAME[idx]);
