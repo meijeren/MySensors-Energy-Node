@@ -62,22 +62,34 @@ void presentation()
 
 
 bool          prevPulse[SENSOR_COUNT]          = {true, true, true};
-const int     DREMPEL[SENSOR_COUNT]            = {570, 512, 512};
-unsigned long pulseCount[SENSOR_COUNT]         = {0, 0, 0};
-boolean       pulseCountReceived[SENSOR_COUNT] = {false, false, false};
-float         totalkWh[SENSOR_COUNT]           = {0, 0, 0};
-unsigned long curWatts[SENSOR_COUNT]           = {0, 0, 0};
-bool          sendNeeded[SENSOR_COUNT]         = {false, false, false};
-unsigned long prevMillis[SENSOR_COUNT]         = {0, 0, 0};
-const int     PULSE_FACTOR[SENSOR_COUNT]       = {375, 1000, 1000};
-const double  PULSE_PER_UNIT[SENSOR_COUNT]     = {
-  ((double)PULSE_FACTOR[0]) / 1000, // Pulses per watt hour
-  ((double)PULSE_FACTOR[1]) / 1000, // Pulses per liter
-  ((double)PULSE_FACTOR[2]) / 1000, // Pulses per liter
-};
 int           min[SENSOR_COUNT]                = {1023, 1023, 1023};
 int           max[SENSOR_COUNT]                = {0, 0, 0};
-const char *  NAME[SENSOR_COUNT]               = {"E: ", "W: ", "G: "};
+unsigned long pulseCount[SENSOR_COUNT]         = {0, 0, 0};
+boolean       pulseCountReceived[SENSOR_COUNT] = {false, false, false};
+double        total[SENSOR_COUNT]              = {0, 0, 0};
+unsigned long current[SENSOR_COUNT]            = {0, 0, 0};
+bool          sendNeeded[SENSOR_COUNT]         = {false, false, false};
+unsigned long prevMillis[SENSOR_COUNT]         = {0, 0, 0};
+const char *  NAME[SENSOR_COUNT]               = {
+  "E: ",  // power
+  "W: ",  // water
+  "G: "   // gas
+};
+const double  PULSE_FACTOR[SENSOR_COUNT]       = {
+  375,  // 375 pulses per kWh
+  1000, // 1000 pulses per m3 water
+  100   // 100 pulses per m3 gas
+};
+const double  PULSE_PER_UNIT[SENSOR_COUNT]     = {
+  (PULSE_FACTOR[0]) / 1000, // Pulses per watt hour
+  (PULSE_FACTOR[1]) / 1000, // Pulses per liter water
+  (PULSE_FACTOR[2]) / 1000, // Pulses per liter gas
+};
+const int     DREMPEL[SENSOR_COUNT]            = {
+  570, 
+  512, 
+  512
+};
 
 void loop() 
 {
@@ -118,7 +130,7 @@ void loop()
       // determine the time between the pulses
       unsigned long pulseTime = (now - prevMillis[idx]);
       prevMillis[idx] = now;
-      totalkWh[idx] = float(pulseCount[idx]) / PULSE_FACTOR[idx];
+      totalkWh[idx] = double(pulseCount[idx]) / PULSE_FACTOR[idx];
       curWatts[idx] = (3600000000.0 / (PULSE_FACTOR[idx] * pulseTime));
       if (idx < 1)
       {
